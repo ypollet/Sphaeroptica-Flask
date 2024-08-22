@@ -1,1 +1,0 @@
-export { default as LandmarkList} from "./LandmarkList.vue"

@@ -1,1 +1,0 @@
-export { default as DistanceList} from "./DistanceList.vue"
