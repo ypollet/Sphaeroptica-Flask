@@ -37,7 +37,7 @@ export default defineConfig({
           }else if (id.includes('/node_modules/@vue')) {
             return 'vendor_@vue';
           } else if (id.includes('/node_modules/')) {
-            return 'vendor';
+            return 'vendors';
           } else {
             return 'index';
           }

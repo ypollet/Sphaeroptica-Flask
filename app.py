@@ -20,7 +20,7 @@ DEBUG = True
 DATA_FOLDER = f"{cwd}/data"
 
 # instantiate the app
-app = Flask(__name__, static_folder="dist/static", template_folder="dist", static_url_path="/static")
+app = Flask(__name__, static_folder="frontend/dist/static", template_folder="frontend/dist", static_url_path="/static")
 cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config.from_object(__name__)
