@@ -57,15 +57,20 @@ def triangulate(id):
       calib_file = json.load(f)
 
     intrinsics = np.matrix(calib_file["intrinsics"]["camera matrix"]["matrix"])
+    dist_coeffs = np.matrix(calib_file["intrinsics"]["distortion matrix"]["matrix"])
     proj_points = []
     for image in poses:
       extrinsics = np.matrix(calib_file["extrinsics"][image]["matrix"])
       proj_mat = reconstruction.projection_matrix(intrinsics, extrinsics)
       pose = np.matrix([poses[image]['x'], poses[image]['y']])
-      proj_points.append(helpers.ProjPoint(proj_mat, pose))
+      undistorted_pos = reconstruction.undistort_iter(np.array([pose]).reshape((1,1,2)), intrinsics, dist_coeffs)
+      print(f"{image} => \n{proj_mat}\n{undistorted_pos}")
+      proj_points.append(helpers.ProjPoint(proj_mat, undistorted_pos))
     
     # Triangulation computation with all the undistorted landmarks
-    landmark_pos = reconstruction.triangulate_point(proj_points)      
+    landmark_pos = reconstruction.triangulate_point(proj_points)    
+    
+    print(f"Position = {landmark_pos}")   
   
     return {"result": {
           "position": landmark_pos.tolist()
@@ -78,7 +83,6 @@ def reproject(id):
   if request.method == 'POST':
     data = request.get_json()
     position = np.array(data["position"])
-    print(position.shape)
     image_name = data['image']
     
     directory = f"{DATA_FOLDER}/{id}"
@@ -141,6 +145,8 @@ def shortcuts(id):
     to_jsonify["commands"].append({"name" : command, "longitude": longitude, "latitude": latitude})
     
   return jsonify({'result': to_jsonify})
+
+
 # send images
 @app.route('/<id>/images')
 @cross_origin()
@@ -188,4 +194,4 @@ def images(id):
   return jsonify({'result': to_jsonify})
 
 if __name__ == '__main__':
-    app.run()
+    app.run(port=5001)
