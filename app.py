@@ -2,6 +2,7 @@ from flask import Flask, render_template, jsonify, request, send_from_directory,
 
 from flask_cors import CORS, cross_origin
 
+import pystache
 from base64 import encodebytes
 import glob
 import io
@@ -20,7 +21,7 @@ DEBUG = True
 DATA_FOLDER = f"{cwd}/data"
 
 # instantiate the app
-app = Flask(__name__, static_folder="frontend/dist/static", template_folder="frontend/dist", static_url_path="/static")
+app = Flask(__name__, static_folder=None, static_url_path="/static")
 cors = CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config.from_object(__name__)
@@ -42,10 +43,9 @@ site_data = {
 }
 
 # landing page
-@app.route('/<id>')
+@app.route('/')
 def welcome(id):
   return render_template('index.html', **site_data)
-
 
 @app.route('/<id>/triangulate', methods=['POST'])
 def triangulate(id):
@@ -64,18 +64,15 @@ def triangulate(id):
       proj_mat = reconstruction.projection_matrix(intrinsics, extrinsics)
       pose = np.matrix([poses[image]['x'], poses[image]['y']])
       undistorted_pos = reconstruction.undistort_iter(np.array([pose]).reshape((1,1,2)), intrinsics, dist_coeffs)
-      print(f"{image} => \n{proj_mat}\n{undistorted_pos}")
       proj_points.append(helpers.ProjPoint(proj_mat, undistorted_pos))
     
     # Triangulation computation with all the undistorted landmarks
     landmark_pos = reconstruction.triangulate_point(proj_points)    
     
-    print(f"Position = {landmark_pos}")   
   
-    return {"result": {
+    return {
           "position": landmark_pos.tolist()
-       }
-    }
+            }
           
 
 @app.route('/<id>/reproject', methods=['POST'])
@@ -95,11 +92,9 @@ def reproject(id):
 
     pose = reconstruction.project_points(position, intrinsics, extrinsics, dist_coeffs)
     
-    print(position)
-    print(image_name)
-    return {"result":{
-          "pose": {"x": pose.item(0), "y": pose.item(1)}
-       }}
+    return {
+      "pose": {"x": pose.item(0), "y": pose.item(1)}
+            }
 
 def get_response_image(image_path):
     pil_img = Image.open(image_path, mode='r') # reads the PIL image
@@ -115,21 +110,26 @@ def get_response_image(image_path):
 
 
 # send single image
-@app.route('/<id>/<image_name>')
+@app.route('/<id>/<image_name>/full-image')
 @cross_origin()
 def image(id, image_name):
   print(f"Image for {id}/{image_name}")
   directory = f"{DATA_FOLDER}/{id}"
-  image_data = {}
-  try:
-    image_data = get_response_image(f"{directory}/{image_name}")
-    image_data["name"] = image_name
-               
-  except Exception as error:
-    print(error)
+  
     
-#  return send_from_directory(DATA_FOLDER, f"{path}/{image_name}")
-  return image_data["image"]
+  return send_from_directory(directory, f"{image_name}")
+
+# send single image
+@app.route('/<id>/<image_name>/thumbnail')
+@cross_origin()
+def thumbnail(id, image_name):
+  print(f"Thumbnail for {id}/{image_name}")
+  directory = f"{DATA_FOLDER}/{id}"
+  with open(f"{directory}/calibration.json", "r") as f:
+    calib_file = json.load(f)
+  
+    
+  return send_from_directory(f"{directory}/{calib_file['thumbnails']}", f"{image_name}")
 
 # send_shortcuts page
 @app.route('/<id>/shortcuts')
@@ -139,12 +139,8 @@ def shortcuts(id):
   with open(f"{directory}/calibration.json", "r") as f:
     calib_file = json.load(f)
   to_jsonify = {}
-  to_jsonify["commands"] = []
-  for command in calib_file["commands"]:
-    longitude, latitude = calib_file["commands"][command]
-    to_jsonify["commands"].append({"name" : command, "longitude": longitude, "latitude": latitude})
-    
-  return jsonify({'result': to_jsonify})
+  to_jsonify["commands"] = calib_file["commands"]
+  return jsonify(to_jsonify)
 
 
 # send images
@@ -189,9 +185,10 @@ def images(id):
     vec = C - center
     long, lat = converters.get_long_lat(vec)
     image_data["longitude"], image_data["latitude"] = converters.rad2degrees(long), converters.rad2degrees(lat)
-    
+  
+  print(f"Sending {len(encoded_images)} images")
   to_jsonify["images"] = encoded_images
-  return jsonify({'result': to_jsonify})
+  return jsonify(to_jsonify)
 
 if __name__ == '__main__':
     app.run(port=5001)
